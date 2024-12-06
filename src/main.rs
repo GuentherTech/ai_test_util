@@ -114,12 +114,6 @@ async fn process(contents: &String) -> Result<Result<TestPass, TestError>, Box<d
 }
 
 #[derive(Debug)]
-struct TestInfo {
-    input: String,
-    expected: String
-}
-
-#[derive(Debug)]
 struct TestPass {
     content: String,
 }
