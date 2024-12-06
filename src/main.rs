@@ -1,10 +1,9 @@
 use std::{env, error::Error, fmt, fs};
-use serde::Deserialize;
 use regex::Regex;
 use inline_colorization::*;
 use csv::Writer;
 use chrono::Local;
-//TODO: Refactor out DescriptionInfo
+use mlua::{Function, Lua};
 use async_openai::{types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs}, Client};
 
 #[tokio::main]
@@ -59,6 +58,7 @@ async fn process(contents: &String) -> Result<Result<TestPass, TestError>, Box<d
         };
     let gen_prompt = fs::read_to_string(env::var("GEN_PROMPT")?)?;
     let test_prompt = fs::read_to_string(env::var("TEST_PROMPT")?)?;
+    let structure_test = fs::read_to_string(env::var("STRUCTURE_TEST")?)?;
     let model = env::var("model")?;
     let client = Client::new();
     let req = CreateChatCompletionRequestArgs::default()
@@ -74,25 +74,33 @@ async fn process(contents: &String) -> Result<Result<TestPass, TestError>, Box<d
     let r = Regex::new(r"(\{(.|\n)*?\}|\[(.|\n)*?\])")?;
     if let Some(m) = r.find(&message) {
         let jzml = m.as_str();
-        Ok(match serde_json::from_str::<DescriptionInfo>(jzml) {
-            Ok(info) => {
-                let req = CreateChatCompletionRequestArgs::default()
-                    .model(model)
-                    .messages([
-                        ChatCompletionRequestUserMessageArgs::default()
-                    .content(test_prompt
-                        .replace("__description__", input)
-                        .replace("__baseline__", expected_output)
-                        .replace("__input__", jzml))
-                    .build()?.into()
-                ])
-                .build()?;
-                let res = client.chat().create(req).await?;
-                let test_message = res.choices.first().unwrap().message.content.clone().unwrap();
-                if test_message.to_lowercase() == "true" {
-                    Ok(TestPass { content: message, info })
+        let lua = Lua::new();
+        let globals = lua.globals();
+        lua.load(structure_test).exec()?;
+        let test_func: Function = globals.get("test")?;
+        Ok(match test_func.call::<bool>(jzml) {
+            Ok(result) => {
+                if result {
+                    let req = CreateChatCompletionRequestArgs::default()
+                        .model(model)
+                        .messages([
+                            ChatCompletionRequestUserMessageArgs::default()
+                        .content(test_prompt
+                            .replace("__description__", input)
+                            .replace("__baseline__", expected_output)
+                            .replace("__input__", jzml))
+                        .build()?.into()
+                    ])
+                    .build()?;
+                    let res = client.chat().create(req).await?;
+                    let test_message = res.choices.first().unwrap().message.content.clone().unwrap();
+                    if test_message.to_lowercase() == "true" {
+                        Ok(TestPass { content: message })
+                    } else {
+                        Err(TestError { content: message, location: ErrorLocation::Test, err: None })
+                    }
                 } else {
-                    Err(TestError { content: message, location: ErrorLocation::Test, err: None })
+                    Err(TestError { content: message, location: ErrorLocation::Parse, err: None })
                 }
             },
             Err(e) => Err(TestError { content: message, location: ErrorLocation::Parse, err: Some(e.to_string()) })
@@ -111,13 +119,6 @@ struct TestInfo {
 #[derive(Debug)]
 struct TestPass {
     content: String,
-    info: DescriptionInfo
-}
-
-#[derive(Deserialize, Debug)]
-struct DescriptionInfo {
-    problem: String,
-    resolution: String
 }
 
 #[derive(Debug)]
