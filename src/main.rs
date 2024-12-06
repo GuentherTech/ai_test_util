@@ -4,7 +4,7 @@ use inline_colorization::*;
 use csv::Writer;
 use chrono::Local;
 use mlua::{Function, Lua};
-use async_openai::{types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs}, Client};
+use async_openai::{config::OpenAIConfig, types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs}, Client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -59,8 +59,11 @@ async fn process(contents: &String) -> Result<Result<TestPass, TestError>, Box<d
     let gen_prompt = fs::read_to_string(env::var("GEN_PROMPT")?)?;
     let test_prompt = fs::read_to_string(env::var("TEST_PROMPT")?)?;
     let structure_test = fs::read_to_string(env::var("STRUCTURE_TEST")?)?;
+    let url = env::var("API_URL").unwrap_or_default();
+    let key = env::var("API_KEY").unwrap_or_default();
     let model = env::var("model")?;
-    let client = Client::new();
+    let config = OpenAIConfig::new().with_api_base(url).with_api_key(key);
+    let client = Client::with_config(config);
     let req = CreateChatCompletionRequestArgs::default()
         .model(&model)
         .messages([
