@@ -21,6 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 match process(&contents).await? {
                     Ok(p) => {
                         println!("Test {} passed", name);
+                        println!("{}", p.content);
                         writer.write_record(&[name, "Passed".to_string(), contents, p.content, "".to_string(), "".to_string()])?;
                     }
                     Err(e) => {
@@ -29,6 +30,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         if let Some(m) = &e.err {
                             println!("{}", m)
                         }
+                        println!("{}", e.content);
                         print!("{color_reset}");
                         writer.write_record(&[name, "Failed".to_string(), contents, e.content, e.location.to_string(), e.err.unwrap_or("".to_string())])?;
                     }
