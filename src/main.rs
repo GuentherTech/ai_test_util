@@ -4,16 +4,17 @@ use regex::Regex;
 use inline_colorization::*;
 use csv::Writer;
 use chrono::Local;
-
+//TODO: Refactor out DescriptionInfo
 use async_openai::{types::{ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs}, Client};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     dotenv::dotenv().ok();
     let tests_dir = env::var("TEST_DIR")?;
+    let results_dir = env::var("RESULTS_DIR")?;
     match fs::read_dir(tests_dir) {
         Ok(test_files) => {
-            let mut writer = Writer::from_path(format!("results{}.csv", Local::now().format("%Y-%m-%d %H%M")))?;
+            let mut writer = Writer::from_path(format!("{}/results{}.csv", results_dir, Local::now().format("%Y-%m-%d %H%M")))?;
             writer.write_record(&["Name", "Status", "Input", "Result", "Error Location", "Error"])?;
             for path in test_files.map(|p| { p.unwrap() }).filter(|p| { p.file_type().unwrap().is_file() }) {
                 let name = path.file_name().to_str().unwrap_or("").to_string();

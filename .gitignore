@@ -21,8 +21,7 @@ Cargo.lock
 .idea/target
 
 tests/
+prompts/
+results/
 
 .env
-
-test_prompt.md
-gen_prompt.md
